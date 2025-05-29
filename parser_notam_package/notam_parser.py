@@ -2,10 +2,10 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 # Sửa thành:
-from my_parser.ICAO_dict.ICAO_abbr import abbr
-from my_parser.ICAO_dict.ICAO_location import location_code_prefix
-from my_parser.ICAO_dict.ICAO_entity import entity
-from my_parser.ICAO_dict.ICAO_status import status
+from parser_notam_package.ICAO_dict.ICAO_abbr import abbr
+from parser_notam_package.ICAO_dict.ICAO_location import location_code_prefix
+from parser_notam_package.ICAO_dict.ICAO_entity import entity
+from parser_notam_package.ICAO_dict.ICAO_status import status
 class NOTAMParser:
     def __init__(self):
         self.abbreviations = abbr
