@@ -1,4 +1,3 @@
-````markdown
 # ✈️ NOTAM Parser
 
 **NOTAM Parser** là một thư viện Python giúp phân tích cú pháp theo định dạng ICAO.
