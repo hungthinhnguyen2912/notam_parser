@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-# Sửa thành:
 from parser_notam_package.ICAO_dict.ICAO_abbr import abbr
 from parser_notam_package.ICAO_dict.ICAO_location import location_code_prefix
 from parser_notam_package.ICAO_dict.ICAO_entity import entity
@@ -197,6 +196,41 @@ class NOTAMParser:
             body = re.sub(r'\s+', ' ', body)
             return body
         return ""
+
+    def parse_created(self,notam_text:str):
+        """
+            Parse the CREATED timestamp from NOTAM text and return ISO format
+
+            Args:
+                notam_text (str): Raw NOTAM text
+
+            Returns:
+                str: ISO format timestamp (e.g., '2025-05-09T10:04:00.000Z')
+                     Returns None if CREATED field not found
+            """
+        created_pattern = r'CREATED:\s*(\d{1,2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})'
+
+        match = re.search(created_pattern, notam_text)
+        if not match:
+            return 'None'
+
+        day, month_str, year, hour, minute, second = match.groups()
+
+        # Month mapping
+        months = {
+            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+        }
+
+        month = months.get(month_str)
+        if not month:
+            return 'None'
+
+        try:
+            dt = datetime(int(year), month, int(day), int(hour), int(minute), int(second))
+            return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        except ValueError:
+            return 'None'
 
     def parse_limits(self, notam_text: str) -> Tuple[str, str]:
         f_match = re.search(r'F\)\s*([^\n\r]*)', notam_text)
