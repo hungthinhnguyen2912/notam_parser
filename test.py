@@ -11,8 +11,8 @@ CREATED: 11 May 2025 07:46:00  SOURCE: EUECYIYN
 """
 
 result = cc.parse_notam(sample1)
-print(cc.format_output(result))
-### Lấy ra từng cái 1 của extract fields:
+print(cc.print_result(result))
+###
 print("===========================")
 # state
 state = cc.parse_state(sample1)

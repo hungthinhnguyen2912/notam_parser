@@ -6,6 +6,8 @@ from parser_notam_package.ICAO_dict.ICAO_abbr import abbr
 from parser_notam_package.ICAO_dict.ICAO_location import location_code_prefix
 from parser_notam_package.ICAO_dict.ICAO_entity import entity
 from parser_notam_package.ICAO_dict.ICAO_status import status
+
+
 class NOTAMParser:
     def __init__(self):
         self.abbreviations = abbr
@@ -45,9 +47,9 @@ class NOTAMParser:
         lat_match = re.search(r'(\d{4})([NS])', coord_str)
         lon_match = re.search(r'(\d{5})([EW])', coord_str)
 
-        area = {}
+        area_affected = {}
         if lat_match and lon_match:
-            area = {
+            area_affected = {
                 'lat': lat_match.group(1) + lat_match.group(2),
                 'long': lon_match.group(1) + lon_match.group(2),
                 'radius': radius
@@ -56,24 +58,41 @@ class NOTAMParser:
         return {
             'fir': fir,
             'notam_code': notam_code,
-            'area': area
+            'area_affected': area_affected
         }
-    def parse_q_code (self,qcode:str):
-        entity_code = qcode[1:3]
-        status_code = qcode[3:5]
+    def parse_notam_code(self,notam):
+        q_info = self.parse_q_line(notam)
+        notam_code = q_info.get('notam_code','')
+        return notam_code
+
+    def parse_fir(self, notam):
+        q_info = self.parse_q_line(notam)
+        fir = q_info.get('fir', '')
+        return fir
+
+    def parse_area_affected(self, notam):
+        q_info = self.parse_q_line(notam)
+        area = q_info.get('area_affected', {})
+        return area
+
+    def parse_q_code(self, notam: str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        entity_code = q_notam[1:3]
+        status_code = q_notam[3:5]
 
         entity_info = entity.get(entity_code, {})
-        area = entity_info.get('area','')
-        sub_area = entity_info.get('sub_area','')
-        subject = entity_info.get('subject','')
+        category_area = entity_info.get('area', '')
+        sub_area = entity_info.get('sub_area', '')
+        subject = entity_info.get('subject', '')
 
-        status_info = status.get(status_code,{})
-        condition= status_info.get('condition','')
-        modifier = status_info.get('modifier','')
+        status_info = status.get(status_code, {})
+        condition = status_info.get('condition', '')
+        modifier = status_info.get('modifier', '')
 
-        return  {
+        return {
             'entity': entity_code,
-            'area' : area,
+            'category_area': category_area,
             'sub_area': sub_area,
             'subject': subject,
             'status': status_code,
@@ -81,13 +100,66 @@ class NOTAMParser:
             'modifier': modifier,
         }
 
+    def parse_entity(self, notam: str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        entity_code = q_notam[1:3]
+        return entity_code
+
+    def parse_category_area(self, notam: str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        entity_code = q_notam[1:3]
+        entity_info = entity.get(entity_code, {})
+        category_area = entity_info.get('area', '')
+        return category_area
+
+    def parse_sub_category_area(self, notam: str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        entity_code = q_notam[1:3]
+        entity_info = entity.get(entity_code, {})
+        sub_area = entity_info.get('sub_area', '')
+        return sub_area
+
+    def parse_subject(self, notam: str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        entity_code = q_notam[1:3]
+        entity_info = entity.get(entity_code, {})
+        subject = entity_info.get('subject', '')
+        return subject
+
+    def parse_status(self, notam: str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        status = q_notam[3:5]
+        return status
+    def parse_condition (self,notam:str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        status_code = q_notam[3:5]
+        status_info = status.get(status_code, {})
+        condition = status_info.get('condition', '')
+        return condition
+
+    def parse_modifier(self,notam:str):
+        q_info = self.parse_q_line(notam)
+        q_notam = q_info.get('notam_code', '')
+        status_code = q_notam[3:5]
+        status_info = status.get(status_code, {})
+        modifier = status_info.get('modifier', '')
+        return modifier
+
     def parse_location(self, notam_text: str) -> str:
         """Parse location from field A"""
         a_match = re.search(r'A\)\s*([A-Z]{4})', notam_text)
         return a_match.group(1) if a_match else ''
-    def state (self,location: str,ICAO_location:Dict) -> str:
+
+    def parse_state(self, notam: str) -> str:
+        location = self.parse_location(notam)
         state = location[0:2]
-        return ICAO_location.get(state)
+        return location_code_prefix.get(state)
 
     def parse_datetime(self, datetime_str: str) -> Optional[datetime]:
         """Parse datetime from format YYMMDDHHmm"""
@@ -152,8 +224,8 @@ class NOTAMParser:
         notam_type = self.parse_notam_type(notam_text)
         q_info = self.parse_q_line(notam_text)
         location = self.parse_location(notam_text)
-        state_name = self.state(location=location,ICAO_location=location_code_prefix)
-        q_code_info = self.parse_q_code(q_info.get('notam_code', ''))
+        state_name = self.parse_state(notam_text)
+        q_code_info = self.parse_q_code(notam_text)
         valid_from, valid_till = self.parse_dates(notam_text)
         schedule = self.parse_schedule(notam_text)
         body = self.parse_body(notam_text)
@@ -165,16 +237,16 @@ class NOTAMParser:
                 'id': notam_id,
                 'notam_type': notam_type,
                 'fir': q_info.get('fir', ''),
-                'entity': q_code_info.get('entity',''),
-                'status': q_code_info.get('status',''),
-                'area': q_code_info.get('area',''),
-                'sub_area': q_code_info.get('sub_area',''),
-                'subject': q_code_info.get('subject',''),
-                'condition': q_code_info.get('condition',''),
-                'modifier': q_code_info.get('modifier',''),
-                'airport': q_info.get('area', {}),
-                'location': location,
                 'notam_code': q_info.get('notam_code', ''),
+                'entity': q_code_info.get('entity', ''),
+                'status': q_code_info.get('status', ''),
+                'category_area': q_code_info.get('category_area', ''),
+                'sub_area': q_code_info.get('sub_area', ''),
+                'subject': q_code_info.get('subject', ''),
+                'condition': q_code_info.get('condition', ''),
+                'modifier': q_code_info.get('modifier', ''),
+                'area_affected': q_info.get('area_affected', {}),
+                'location': location,
                 'valid_from': valid_from,
                 'valid_till': valid_till,
                 'schedule': schedule,
@@ -193,26 +265,42 @@ class NOTAMParser:
         }
         return decode
 
-    def format_output(self, parsed_result: Dict) -> str:
-        """Format output"""
+    def print_result(self, parsed_result: Dict) -> str:
+        """Format output với đầy đủ thông tin từ extracted_fields"""
         fields = parsed_result['extracted_fields']
+
+        # Tách schedule từ body bằng regex
+        body_text = fields['body']
+        schedule_text = "None"
+
+        # Tìm và tách schedule
+        schedule_match = re.search(r'Schedule\s*:\s*(.*?)(?=\s+(?:POSSIBLE|OUTSIDE|CREATED))', body_text, re.IGNORECASE)
+        if schedule_match:
+            schedule_text = schedule_match.group(1).strip()
+            # Loại bỏ schedule khỏi body
+            body_text = re.sub(r'Schedule\s*:\s*.*?(?=\s+(?:POSSIBLE|OUTSIDE|CREATED))', '', body_text,
+                               flags=re.IGNORECASE).strip()
 
         output = f"""
 Extracted Fields:
+State: {fields['state']}
 Id: {fields['id']}
 Notam type: {fields['notam_type']}
 FIR: {fields['fir']}
-Area: {fields['area']}
+Entity: {fields['entity']}
+Status: {fields['status']}
+Category Area: {fields['category_area']}
+Sub area: {fields['sub_area']}
+Subject: {fields['subject']}
+Condition: {fields['condition']}
+Modifier: {fields['modifier']}
+Area affected: {fields['area_affected']}
 Location: {fields['location']}
 Notam code: {fields['notam_code']}
 Valid from: {fields['valid_from']}
-Valid till: {fields['valid_till']}"""
-
-        if fields['schedule']:
-            output += f"\nSchedule: {fields['schedule']}"
-
-        output += f"""
-Body: {fields['body']}
+Valid till: {fields['valid_till']}
+Body: {body_text}
+Schedule: {schedule_text}
 Lower limit: {fields['lower_limit']}
 Upper limit: {fields['upper_limit']}"""
 
