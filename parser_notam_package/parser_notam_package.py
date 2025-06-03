@@ -1,12 +1,10 @@
 import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from parser_notam_package.ICAO_dict.ICAO_abbr import abbr
 from parser_notam_package.ICAO_dict.ICAO_location import location_code_prefix
 from parser_notam_package.ICAO_dict.ICAO_entity import entity
 from parser_notam_package.ICAO_dict.ICAO_status import status
-
-
 class NOTAMParser:
     def __init__(self):
         self.abbreviations = abbr
@@ -20,7 +18,7 @@ class NOTAMParser:
     def parse_notam_id(self, notam_text: str) -> str:
         """Parse NOTAM ID from line 1"""
         match = re.search(r'([A-Z]\d{4}/\d{2})', notam_text)
-        return match.group(1) if match else "None"
+        return match.group(1) if match else None
 
     def parse_notam_type(self, notam_text: str) -> str:
         """Parse NOTAM type from line 1"""
@@ -59,9 +57,10 @@ class NOTAMParser:
             'notam_code': notam_code,
             'area_affected': area_affected
         }
-    def parse_notam_code(self,notam):
+
+    def parse_notam_code(self, notam):
         q_info = self.parse_q_line(notam)
-        notam_code = q_info.get('notam_code','')
+        notam_code = q_info.get('notam_code', '')
         return notam_code
 
     def parse_fir(self, notam):
@@ -74,6 +73,16 @@ class NOTAMParser:
         area = q_info.get('area_affected', {})
         return area
 
+    def normalize_coordinates(self, lat: str, long: str) -> tuple[Optional[str], Optional[str]]:
+        """Validate and normalize ICAO coordinates (e.g., 3116N, 12133E)."""
+        lat_pattern = r"^[0-9]{4}[NS]$"
+        long_pattern = r"^[0-9]{5}[EW]$"
+        if not (lat and long):
+            return None, None
+        if not (re.match(lat_pattern, lat) and re.match(long_pattern, long)):
+            print(f"Invalid coordinates: lat={lat}, long={long}")
+            return None, None
+        return lat, long
     def parse_q_code(self, notam: str):
         q_info = self.parse_q_line(notam)
         q_notam = q_info.get('notam_code', '')
@@ -134,7 +143,8 @@ class NOTAMParser:
         q_notam = q_info.get('notam_code', '')
         status = q_notam[3:5]
         return status
-    def parse_condition (self,notam:str):
+
+    def parse_condition(self, notam: str):
         q_info = self.parse_q_line(notam)
         q_notam = q_info.get('notam_code', '')
         status_code = q_notam[3:5]
@@ -142,7 +152,7 @@ class NOTAMParser:
         condition = status_info.get('condition', '')
         return condition
 
-    def parse_modifier(self,notam:str):
+    def parse_modifier(self, notam: str):
         q_info = self.parse_q_line(notam)
         q_notam = q_info.get('notam_code', '')
         status_code = q_notam[3:5]
@@ -197,17 +207,7 @@ class NOTAMParser:
             return body
         return ""
 
-    def parse_created(self,notam_text:str):
-        """
-            Parse the CREATED timestamp from NOTAM text and return ISO format
-
-            Args:
-                notam_text (str): Raw NOTAM text
-
-            Returns:
-                str: ISO format timestamp (e.g., '2025-05-09T10:04:00.000Z')
-                     Returns None if CREATED field not found
-            """
+    def parse_created(self, notam_text: str):
         created_pattern = r'CREATED:\s*(\d{1,2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})'
 
         match = re.search(created_pattern, notam_text)
@@ -261,44 +261,36 @@ class NOTAMParser:
         state_name = self.parse_state(notam_text)
         q_code_info = self.parse_q_code(notam_text)
         valid_from, valid_till = self.parse_dates(notam_text)
+        valid_from_str = valid_from.isoformat() if valid_from else None
+        valid_till_str = valid_till.isoformat() if valid_till else None
         schedule = self.parse_schedule(notam_text)
         body = self.parse_body(notam_text)
         lower_limit, upper_limit = self.parse_limits(notam_text)
         expanded_body = self.expand_abbreviations(body)
         result = {
-            'extracted_fields': {
-                'state': state_name,
-                'id': notam_id,
-                'notam_type': notam_type,
-                'fir': q_info.get('fir', ''),
-                'notam_code': q_info.get('notam_code', ''),
-                'entity': q_code_info.get('entity', ''),
-                'status': q_code_info.get('status', ''),
-                'category_area': q_code_info.get('category_area', ''),
-                'sub_area': q_code_info.get('sub_area', ''),
-                'subject': q_code_info.get('subject', ''),
-                'condition': q_code_info.get('condition', ''),
-                'modifier': q_code_info.get('modifier', ''),
-                'area_affected': q_info.get('area_affected', {}),
-                'location': location,
-                'valid_from': valid_from,
-                'valid_till': valid_till,
-                'schedule': schedule,
-                'body': expanded_body,
-                'lower_limit': lower_limit,
-                'upper_limit': upper_limit
-            }
-        }
+            'state': state_name,
+            'id': notam_id,
+            'notam_type': notam_type,
+            'fir': q_info.get('fir', ''),
+            'notam_code': q_info.get('notam_code', ''),
+            'entity': q_code_info.get('entity', ''),
+            'status': q_code_info.get('status', ''),
+            'category_area': q_code_info.get('category_area', ''),
+            'sub_area': q_code_info.get('sub_area', ''),
+            'subject': q_code_info.get('subject', ''),
+            'condition': q_code_info.get('condition', ''),
+            'modifier': q_code_info.get('modifier', ''),
+            'area_affected': q_info.get('area_affected', {}),
+            'location': location,
+            'valid_from': valid_from_str,
+            'valid_till': valid_till_str,
+            'schedule': schedule,
+            'body': expanded_body,
+            'lower_limit': lower_limit,
+            'upper_limit': upper_limit
 
+        }
         return result
-
-    def decode_notam(self, notam_text: str) -> Dict:
-        expanded_text = self.expand_abbreviations(notam_text)
-        decode = {
-            'decode': expanded_text
-        }
-        return decode
-
     def print_result(self, parsed_result: Dict) -> str:
         """Format output với đầy đủ thông tin từ extracted_fields"""
         fields = parsed_result['extracted_fields']
@@ -316,7 +308,6 @@ class NOTAMParser:
                                flags=re.IGNORECASE).strip()
 
         output = f"""
-Extracted Fields:
 State: {fields['state']}
 Id: {fields['id']}
 Notam type: {fields['notam_type']}
@@ -339,7 +330,7 @@ Lower limit: {fields['lower_limit']}
 Upper limit: {fields['upper_limit']}"""
 
         return output
+    def to_json(self,notam_text:str) -> Dict:
+        parsed_data = self.parse_notam(notam_text)
+        return parsed_data
 
-    def add_abbreviation(self, abbr: str, full_form: str):
-        """Thêm abbreviation mới"""
-        self.abbreviations[abbr.upper()] = full_form

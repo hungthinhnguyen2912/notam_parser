@@ -6,6 +6,14 @@
 
 ---
 
+![img.png](img.png)
+
+> Ảnh trên là Data Format trên trang web của ICAO
+
+---
+> File q_code.pdf là quy định về mã Q code ở Q line. Trong file quy định chữ cái thứ 2 và 3 của Q code để xác định Q code đó thuộc Area, SubArea nào. Quy định chữ cái thứ 4 và thứ 5 thuộc condition nào và modifier nào
+> 
+
 ## 🚀 Cài đặt
 
 ```bash
@@ -86,8 +94,4 @@ cc.parse_schedule(sample1)        # Schedule string
 cc.parse_body(sample1)            # Nội dung phần E
 cc.parse_limits(sample1)          # (lower_limit, upper_limit)
 ```
-
----
-
-## Giấy phép
 
