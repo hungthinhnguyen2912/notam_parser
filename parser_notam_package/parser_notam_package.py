@@ -5,6 +5,7 @@ from parser_notam_package.ICAO_dict.ICAO_abbr import abbr
 from parser_notam_package.ICAO_dict.ICAO_location import location_code_prefix
 from parser_notam_package.ICAO_dict.ICAO_entity import entity
 from parser_notam_package.ICAO_dict.ICAO_status import status
+from geopy.geocoders import Nominatim
 class NOTAMParser:
     def __init__(self):
         self.abbreviations = abbr
@@ -20,12 +21,12 @@ class NOTAMParser:
         match = re.search(r'([A-Z]\d{4}/\d{2})', notam_text)
         return match.group(1) if match else None
 
-    def parse_notam_type(self, notam_text: str) -> str:
+    def parse_notam_type(self, notam_text: str) -> Optional[str]:
         """Parse NOTAM type from line 1"""
         for code, type_name in self.notam_types.items():
             if code in notam_text:
                 return type_name
-        return "None"
+        return None
 
     def parse_q_line(self, notam_text: str) -> Dict:
         """Parse Q line to get FIR, area, notam code"""
@@ -73,16 +74,6 @@ class NOTAMParser:
         area = q_info.get('area_affected', {})
         return area
 
-    def normalize_coordinates(self, lat: str, long: str) -> tuple[Optional[str], Optional[str]]:
-        """Validate and normalize ICAO coordinates (e.g., 3116N, 12133E)."""
-        lat_pattern = r"^[0-9]{4}[NS]$"
-        long_pattern = r"^[0-9]{5}[EW]$"
-        if not (lat and long):
-            return None, None
-        if not (re.match(lat_pattern, lat) and re.match(long_pattern, long)):
-            print(f"Invalid coordinates: lat={lat}, long={long}")
-            return None, None
-        return lat, long
     def parse_q_code(self, notam: str):
         q_info = self.parse_q_line(notam)
         q_notam = q_info.get('notam_code', '')
@@ -231,6 +222,60 @@ class NOTAMParser:
             return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
         except ValueError:
             return 'None'
+    # def convert_notam_coord(self,coord: str) -> Tuple[float, float]:
+    #     import re
+    #
+    #     match = re.match(r"(\d{4})([NS])(\d{5})([EW])", coord)
+    #     if not match:
+    #         raise ValueError("Tọa độ không đúng định dạng")
+    #
+    #     lat_deg = int(match.group(1)[:2])
+    #     lat_min = int(match.group(1)[2:])
+    #     lat_dir = match.group(2)
+    #
+    #     lon_deg = int(match.group(3)[:3])
+    #     lon_min = int(match.group(3)[3:])
+    #     lon_dir = match.group(4)
+    #
+    #     lat = lat_deg + lat_min / 60
+    #     lon = lon_deg + lon_min / 60
+    #
+    #     if lat_dir == 'S':
+    #         lat = -lat
+    #     if lon_dir == 'W':
+    #         lon = -lon
+    #
+    #     return lat, lon
+    def geopy_address(self,notam_text:str):
+        q_match = re.search(r'Q\)\s*([^/]+)/([^/]+)/[^/]+/[^/]+/[^/]+/(\d{3})/(\d{3})/(\d{4}[NS]\d{5}[EW])(\d{3})',
+                            notam_text)
+        coord_str = q_match.group(5)
+
+        lat_match = re.search(r'(\d{4})([NS])', coord_str)
+        lon_match = re.search(r'(\d{5})([EW])', coord_str)
+
+        lat_num = lat_match.group(1)
+        lat_dir = lat_match.group(2)
+
+        lon_num = lon_match.group(1)
+        lon_dir = lon_match.group(2)
+
+        lat_deg = int(lat_num[:2])
+        lat_min = int(lat_num[2:])
+
+        lon_deg = int(lon_num[:3])
+        lon_min = int(lon_num[3:])
+        lat = lat_deg + lat_min / 60
+        lon = lon_deg + lon_min / 60
+
+        if lat_dir == 'S':
+            lat = -lat
+        if lon_dir == 'W':
+            lon = -lon
+
+        geolocator = Nominatim(user_agent="notam_tool")
+        location = geolocator.reverse((lat, lon), language='en')
+        return location.address
 
     def parse_limits(self, notam_text: str) -> Tuple[str, str]:
         f_match = re.search(r'F\)\s*([^\n\r]*)', notam_text)
