@@ -30,40 +30,47 @@ from parser_notam_package import NOTAMParser
 cc = NOTAMParser()
 
 sample1 = """
-B1974/25 NOTAMN 
-Q) LFBB/QACAH/IV/BO /AE/000/020/4449N00031E009 
-A) LFBE B) 2505260000 C) 2506012300 
-E) CTR 'BERGERAC' SKED : - MON-FRI : 0600-1800  - SAT : 0700-1010   1130-1700 - SUN : 0645-1000   1120-1645 POSSIBLE 1HR EXTENSION FOR SKED COMMERCIAL FLIGHTS. OUTSIDE THESE SKED, CTR DOWNGRADED TO G AND AD CTL NOT PROVIDED. 
-CREATED: 11 May 2025 07:46:00  SOURCE: EUECYIYN
+A1554/25 NOTAMN 
+Q) VVHN/QMXXX/IV/BO/A/000/999/2113N10548E005
+A) VVNB B) 2506021900 C) 2506062300 
+D) DAILY 1900-2300
+E) SURVEY ON TAXIWAYS V, V2, V9 DRG INTERMITTENT TIME BTN FLTS.
+
 """
 
 result = cc.parse_notam(sample1)
-print(cc.print_result(result))
+print(cc.print_result(sample1))
 ```
 
 ### Kết quả mẫu:
 
 ```
-State: France
-Id: B1974/25
+State: Vietnam
+Id: A1554/25
 Notam type: NEW
-FIR: LFBB
-Entity: AC
-Status: AH
-Category Area: ATM
-Sub area: Airspace organization management
-Subject: Control zone
-Condition: Availability
-Modifier: Hours of service are now
-...
+FIR: VVHN
+Entity: MX
+Status: XX
+Category Area: AGA
+Sub area: Movement and landing area
+Subject: Taxiway(s)
+Condition: Other
+Modifier: Plain language
+Area affected: {'lat': '2113N', 'long': '10548E', 'radius': 5}
+Location: VVNB
+Notam code: QMXXX
+Valid from: 2025-06-02T19:00:00+00:00
+Valid till: 2025-06-06T23:00:00+00:00
+Body: SURVEY ON TAXIWAYS V, V2, V9 During INTERMITTENT TIME Between Flights.
+Schedule: None
+Lower limit: None
+Upper limit: None
 ```
 
 ---
 
 ## Truy cập từng thành phần riêng lẻ
-
 ```python
-
 from parser_notam_package import NOTAMParser
 
 cc = NOTAMParser()
@@ -95,3 +102,17 @@ cc.parse_body(sample1)            # Nội dung phần E
 cc.parse_limits(sample1)          # (lower_limit, upper_limit)
 ```
 
+## Xác định địa điểm dựa vào toạ độ từ Q-line
+```python
+address = cc.geopy_address(sample1)
+print(address) # Noi Bai International Airport, Vo Nguyen Giap Road, Xã Phú Cường, Sóc Sơn District, Hà Nội, Vietnam
+```
+## Validate dữ liệu với JSON Schema
+```python
+from parser_notam_package import NOTAMSchema
+schema = NOTAMSchema()
+if schema.validate_detail(notam_json):
+    print("Valid")
+else:
+    print("Invalid")
+```
