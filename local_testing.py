@@ -4,81 +4,29 @@ from parser_notam_package.json_schema_notam import NOTAMSchema
 schema = NOTAMSchema()
 parser = NOTAMParser()
 sample1 = """
-P1429/25 NOTAMN 
-Q) LFFF/QOBCE/IV/M  /A /000/999/4947N00439E005 
-A) LFQV B) 2504301600 C) 2604271600 
-E) CRANE OPR CLOSE TO 'CHARLEVILLE MEZIERES (HMEZ)' HLP  RDL : 82/3.07NM ARP LFQV PSN : 494731.319''N / 0044315.941''E HEIGHT : 136FT  ELEV :857FT LIGHTING : NIGHT 
-CREATED: 25 Apr 2025 14:49:00  SOURCE: EUECYIYN
-"""
-sample_error = """
-P1429/25 NOTAMN 
-Q) LFFF/QOBCE/IV/M  /A /000/999/4947N00439E005 
-A) LFQV B) 2504301600 C) 2604271600 
-E) CRANE OPR CLOSE TO 'CHARLEVILLE MEZIERES (HMEZ)' HLP  
-RDL : 82/3.07NM ARP LFQV PSN : 494731.319''N / 0044315.941''E 
-HEIGHT : 136FT  ELEV :857FT LIGHTING : NIGHT 
-Schedule: 25 0800-1600 
-CREATED: 25 Apr 2025 14:49:00  SOURCE: EUECYIYN
+B0899/25 NOTAMN
+Q) VVTS/QRTCA/IV/BO/W/000/100/1045N10640E025
+A) VVTS B) 2506102300 C) 2506110400
+E) TEMPO RESTRICTED AREA ACT DUE TO MILITARY EXERCISE.
+F) SFC G) FL100
 """
 
-# notam_json = parser.to_json(sample1)
-# print(notam_json)
+notam_json = parser.to_json(sample1)
+print(notam_json)
+notam_print = parser.print_result(sample1)
+print(notam_print)
 
-
-notam_json_error = {
-    'state': 'France',
-    'id': None,
-    'notam_type': 'NEW',
-    'fir': 'LFFF',
-    'notam_code': 'QOBCE',
-    'entity': 'OB',
-    'status': 'CE',
-    'category_area': 'Other Information',
-    'sub_area': 'Other Information',
-    'subject': 'Obstacle',
-    'condition': 'Changes',
-    'modifier': 'Erected',
-    'area_affected': {'lat': '4947N', 'long': '00439E', 'radius': "5"},
-    'location': 'LFQV',
-    'valid_from': 202504301600,
-    'valid_till': None,
-    'schedule': 'None',
-    'body': 'test body',
-    'lower_limit': 'None',
-    'upper_limit': 'None'
-}
-
-if schema.validate_detail(notam_json_error):
-    print("NOTAM valid schema.")
+if schema.validate_detail(parser.parse_notam(sample1)):
+    print("Valid")
 else:
-    print("NOTAM invalid")
+    print("Invalid")
 
-notam_missing_value_json = {
-    'state': 'France',
-    'notam_type': 'NEW',
-    'fir': 'LFFF',
-    'notam_code': 'QOBCE',
-    'entity': 'OB',
-    'status': 'CE',
-    'category_area': 'Other Information',
-    'sub_area': 'Other Information',
-    'subject': 'Obstacle',
-    'condition': 'Changes',
-    'modifier': 'Erected',
-    'area_affected': {'lat': '4947N', 'long': '00439E', 'radius': "5"},
-    'location': 'LFQV',
-    'valid_from': 202504301600,
-    'valid_till': "None",
-    'schedule': 'None',
-    'body': 'test body',
-    'lower_limit': 'None',
-    'upper_limit': 'None'
-}
+address = parser.geopy_address(sample1)
+print(address)
 
-n = schema.missing_value_notam(notam_missing_value_json)
-print(n)
+created = parser.parse_created(sample1)
+print(created)
 
-if schema.validate_detail(n):
-    print("NOTAM valid schema.")
-else:
-    print("NOTAM invalid")
+valid_from , valid_till = parser.parse_dates(sample1)
+print(valid_from)
+print(valid_till)

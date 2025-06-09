@@ -21,12 +21,30 @@ class NOTAMParser:
         match = re.search(r'([A-Z]\d{4}/\d{2})', notam_text)
         return match.group(1) if match else None
 
-    def parse_notam_type(self, notam_text: str) -> Optional[str]:
-        """Parse NOTAM type from line 1"""
-        for code, type_name in self.notam_types.items():
-            if code in notam_text:
-                return type_name
-        return None
+    def parse_notam_type(self, notam_text: str) -> Dict:
+        """Parse NOTAM type from line 1 and extract referenced NOTAM ID if applicable"""
+        result = {
+            'type': None,
+            'referenced_notam': None
+        }
+
+        # Check for NOTAM type and extract referenced NOTAM if exists
+        if "NOTAMR" in notam_text:
+            result['type'] = "REPLACE"
+            # Pattern to find the replaced NOTAM ID after NOTAMR
+            replace_match = re.search(r'NOTAMR\s+([A-Z]\d{4}/\d{2})', notam_text)
+            if replace_match:
+                result['referenced_notam'] = replace_match.group(1)
+        elif "NOTAMC" in notam_text:
+            result['type'] = "CANCEL"
+            # Pattern to find the cancelled NOTAM ID after NOTAMC
+            cancel_match = re.search(r'NOTAMC\s+([A-Z]\d{4}/\d{2})', notam_text)
+            if cancel_match:
+                result['referenced_notam'] = cancel_match.group(1)
+        elif "NOTAMN" in notam_text:
+            result['type'] = "NEW"
+
+        return result
 
     def parse_q_line(self, notam_text: str) -> Dict:
         """Parse Q line to get FIR, area, notam code"""
@@ -175,12 +193,20 @@ class NOTAMParser:
             pass
         return None
 
-    def parse_dates(self, notam_text: str) -> Tuple[Optional[datetime], Optional[datetime]]:
+    def parse_dates(self, notam_text: str):
+        import re
+
         b_match = re.search(r'B\)\s*(\d{10})', notam_text)
-        c_match = re.search(r'C\)\s*(\d{10})', notam_text)
+        c_match = re.search(r'C\)\s*([A-Z]{4,}|[0-9]{10})', notam_text.strip())
 
         valid_from = self.parse_datetime(b_match.group(1)) if b_match else None
-        valid_till = self.parse_datetime(c_match.group(1)) if c_match else None
+        valid_till = None
+        if c_match:
+            c_value = c_match.group(1)
+            if c_value.isdigit():
+                valid_till = self.parse_datetime(c_value)
+            else:
+                valid_till = c_value  # PERM, EST, TBA...
 
         return valid_from, valid_till
 
@@ -199,15 +225,14 @@ class NOTAMParser:
         return ""
 
     def parse_created(self, notam_text: str):
+        """Parse Created time in Body"""
         created_pattern = r'CREATED:\s*(\d{1,2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})'
 
-        match = re.search(created_pattern, notam_text)
+        match = re.search(created_pattern, self.parse_body(notam_text))
         if not match:
             return 'None'
 
         day, month_str, year, hour, minute, second = match.groups()
-
-        # Month mapping
         months = {
             'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
             'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
@@ -222,30 +247,6 @@ class NOTAMParser:
             return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
         except ValueError:
             return 'None'
-    # def convert_notam_coord(self,coord: str) -> Tuple[float, float]:
-    #     import re
-    #
-    #     match = re.match(r"(\d{4})([NS])(\d{5})([EW])", coord)
-    #     if not match:
-    #         raise ValueError("Tọa độ không đúng định dạng")
-    #
-    #     lat_deg = int(match.group(1)[:2])
-    #     lat_min = int(match.group(1)[2:])
-    #     lat_dir = match.group(2)
-    #
-    #     lon_deg = int(match.group(3)[:3])
-    #     lon_min = int(match.group(3)[3:])
-    #     lon_dir = match.group(4)
-    #
-    #     lat = lat_deg + lat_min / 60
-    #     lon = lon_deg + lon_min / 60
-    #
-    #     if lat_dir == 'S':
-    #         lat = -lat
-    #     if lon_dir == 'W':
-    #         lon = -lon
-    #
-    #     return lat, lon
     def geopy_address(self,notam_text:str):
         q_match = re.search(r'Q\)\s*([^/]+)/([^/]+)/[^/]+/[^/]+/[^/]+/(\d{3})/(\d{3})/(\d{4}[NS]\d{5}[EW])(\d{3})',
                             notam_text)
@@ -300,22 +301,24 @@ class NOTAMParser:
     def parse_notam(self, notam_text: str) -> Dict:
         """Parse complete NOTAM và trả về format mong muốn"""
         notam_id = self.parse_notam_id(notam_text)
-        notam_type = self.parse_notam_type(notam_text)
+        notam_type_info = self.parse_notam_type(notam_text)  # Now returns dict
         q_info = self.parse_q_line(notam_text)
         location = self.parse_location(notam_text)
         state_name = self.parse_state(notam_text)
         q_code_info = self.parse_q_code(notam_text)
         valid_from, valid_till = self.parse_dates(notam_text)
-        valid_from_str = valid_from.isoformat() if valid_from else None
-        valid_till_str = valid_till.isoformat() if valid_till else None
+        valid_from_str = valid_from.isoformat() if isinstance(valid_from, datetime) else valid_from
+        valid_till_str = valid_till.isoformat() if isinstance(valid_till, datetime) else valid_till
         schedule = self.parse_schedule(notam_text)
         body = self.parse_body(notam_text)
         lower_limit, upper_limit = self.parse_limits(notam_text)
         expanded_body = self.expand_abbreviations(body)
+
         result = {
             'state': state_name,
             'id': notam_id,
-            'notam_type': notam_type,
+            'notam_type': notam_type_info['type'],
+            'referenced_notam': notam_type_info['referenced_notam'],
             'fir': q_info.get('fir', ''),
             'notam_code': q_info.get('notam_code', ''),
             'entity': q_code_info.get('entity', ''),
@@ -333,46 +336,52 @@ class NOTAMParser:
             'body': expanded_body,
             'lower_limit': lower_limit,
             'upper_limit': upper_limit
-
         }
         return result
-    def print_result(self, parsed_result: Dict) -> str:
-        """Format output với đầy đủ thông tin từ extracted_fields"""
-        fields = parsed_result['extracted_fields']
 
-        # Tách schedule từ body bằng regex
+    def print_result(self, notam_text: str) -> str:
+        """Format output với đầy đủ thông tin từ extracted_fields"""
+        parsed_result = self.parse_notam(notam_text)
+        fields = parsed_result
+
         body_text = fields['body']
         schedule_text = "None"
 
-        # Tìm và tách schedule
         schedule_match = re.search(r'Schedule\s*:\s*(.*?)(?=\s+(?:POSSIBLE|OUTSIDE|CREATED))', body_text, re.IGNORECASE)
         if schedule_match:
             schedule_text = schedule_match.group(1).strip()
-            # Loại bỏ schedule khỏi body
             body_text = re.sub(r'Schedule\s*:\s*.*?(?=\s+(?:POSSIBLE|OUTSIDE|CREATED))', '', body_text,
                                flags=re.IGNORECASE).strip()
 
+        # Build referenced NOTAM info if exists
+        referenced_info = ""
+        if fields['referenced_notam']:
+            if fields['notam_type'] == "REPLACE":
+                referenced_info = f"Replaces NOTAM: {fields['referenced_notam']}"
+            elif fields['notam_type'] == "CANCEL":
+                referenced_info = f"Cancels NOTAM: {fields['referenced_notam']}"
+
         output = f"""
-State: {fields['state']}
-Id: {fields['id']}
-Notam type: {fields['notam_type']}
-FIR: {fields['fir']}
-Entity: {fields['entity']}
-Status: {fields['status']}
-Category Area: {fields['category_area']}
-Sub area: {fields['sub_area']}
-Subject: {fields['subject']}
-Condition: {fields['condition']}
-Modifier: {fields['modifier']}
-Area affected: {fields['area_affected']}
-Location: {fields['location']}
-Notam code: {fields['notam_code']}
-Valid from: {fields['valid_from']}
-Valid till: {fields['valid_till']}
-Body: {body_text}
-Schedule: {schedule_text}
-Lower limit: {fields['lower_limit']}
-Upper limit: {fields['upper_limit']}"""
+    State: {fields['state']}
+    Id: {fields['id']}
+    Notam type: {fields['notam_type']}{' - ' + referenced_info if referenced_info else ''}
+    FIR: {fields['fir']}
+    Entity: {fields['entity']}
+    Status: {fields['status']} 
+    Category Area: {fields['category_area']}
+    Sub area: {fields['sub_area']}
+    Subject: {fields['subject']}
+    Condition: {fields['condition']}
+    Modifier: {fields['modifier']}
+    Area affected: {fields['area_affected']}
+    Location: {fields['location']}
+    Notam code: {fields['notam_code']}
+    Valid from: {fields['valid_from']}
+    Valid till: {fields['valid_till']}
+    Body: {body_text}
+    Schedule: {schedule_text}
+    Lower limit: {fields['lower_limit']}
+    Upper limit: {fields['upper_limit']}"""
 
         return output
     def to_json(self,notam_text:str) -> Dict:
